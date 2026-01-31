@@ -240,7 +240,7 @@ def generate_projects_markdown_plan(test_result: str) -> str:
 # Create the PlanAgent1 with tools
 plan_agent1 = Agent(
     name="PlanAgent1",
-    model="gemini-1.5-flash",
+    model="gemma-3-27b-it",
     instruction="""You are a creative job market analysis agent. Your role is to:
     1. Analyze the potential job market based on the provided passion
     2. Suggest TOP 3 creative and practical roles
@@ -264,7 +264,7 @@ plan_agent1 = Agent(
 # Create the PlanAgent2 with tools
 plan_agent2 = Agent(
     name="PlanAgent2",
-    model="gemini-1.5-flash",
+    model="gemma-3-27b-it",
     instruction="""You are a curriculum specialist. Your role is to:
     1. Look at the role that was selected
     2. Research additional context about that specific role using the available tools
@@ -289,7 +289,7 @@ plan_agent2 = Agent(
 # Create the DoAgent with tools
 do_agent = Agent(
     name="DoAgent",
-    model="gemini-1.5-flash",
+    model="gemma-3-27b-it",
     instruction="""You are a professional test specialist. Your role is to:
     1. Look at the learning path that was selected
     2. Research additional context about that specific learning path using the available tools
@@ -313,7 +313,7 @@ do_agent = Agent(
 # Create the GoAgent with tools
 go_agent = Agent(
     name="GoAgent",
-    model="gemini-1.5-flash",
+    model="gemma-3-27b-it",
     instruction="""You are a project specialist. Your role is to:
     1. Look at the test result that was selected
     2. Research additional context about that specific test result using the available tools
@@ -352,7 +352,7 @@ do_pipeline = SequentialAgent(
 # Create the Root Agent (orchestrator) that uses the sequential pipeline
 root_agent = Agent(
     name="PlanMasterAgent",
-    model="gemini-1.5-flash",
+    model="gemma-3-27b-it",
     instruction="""You are the Plan Master Agent. Your role is to coordinate plan creation.
 
     When a user provides passion:
@@ -456,7 +456,7 @@ def run_agent_sync(user_prompt: str):
 def main():
     """Main function to run the synthesis agent demo."""
     console.print(Panel.fit(
-        "[bold cyan]Synthesis Agent Demo[/bold cyan]\n"
+        "[bold cyan]Synthesis App[/bold cyan]\n"
         "Powered by Google ADK with Opik Observability",
         border_style="cyan"
     ))
