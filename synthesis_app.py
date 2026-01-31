@@ -32,6 +32,8 @@ Agents:
 import os
 import asyncio
 import warnings
+import time
+from functools import wraps
 from dotenv import load_dotenv
 
 # --- Opik Monkey-patch start ---
@@ -84,14 +86,53 @@ if os.getenv("GOOGLE_API_KEY") and os.getenv("GEMINI_API_KEY"):
 
 # Initialize Opik tracer with configuration
 opik_tracer = OpikTracer(
-    name="recipe-agent-system",
-    tags=["recipe", "demo", "multi-agent"],
+    name="synthesis-agent-system",
+    tags=["synthesis", "multi-agent"],
     metadata={
         "environment": "development",
         "version": "1.0.0"
     },
-    project_name="google-adk-recipes"
+    project_name="synthesis"
 )
+
+
+# Retry decorator for handling API overload errors
+def retry_on_overload(max_retries=5, initial_delay=2, backoff_factor=2):
+    """
+    Decorator to retry function calls with exponential backoff on 503 errors.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay in seconds before first retry
+        backoff_factor: Multiplier for delay after each retry
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    error_str = str(e)
+                    last_exception = e
+                    
+                    # Check if it's a 503 overload error
+                    if "503" in error_str and ("overloaded" in error_str.lower() or "unavailable" in error_str.lower()):
+                        if attempt < max_retries - 1:
+                            console.print(f"[yellow]⚠️  API overloaded. Retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})[/yellow]")
+                            time.sleep(delay)
+                            delay *= backoff_factor
+                            continue
+                    # If it's not a 503 error or we've exhausted retries, raise
+                    raise
+            
+            # If we've exhausted all retries, raise the last exception
+            raise last_exception
+        return wrapper
+    return decorator
 
 
 # Define tools for PlanAgent1
@@ -199,7 +240,7 @@ def generate_projects_markdown_plan(test_result: str) -> str:
 # Create the PlanAgent1 with tools
 plan_agent1 = Agent(
     name="PlanAgent1",
-    model="gemma-3-27b-it",
+    model="gemini-1.5-flash",
     instruction="""You are a creative job market analysis agent. Your role is to:
     1. Analyze the potential job market based on the provided passion
     2. Suggest TOP 3 creative and practical roles
@@ -223,7 +264,7 @@ plan_agent1 = Agent(
 # Create the PlanAgent2 with tools
 plan_agent2 = Agent(
     name="PlanAgent2",
-    model="gemma-3-27b-it",
+    model="gemini-1.5-flash",
     instruction="""You are a curriculum specialist. Your role is to:
     1. Look at the role that was selected
     2. Research additional context about that specific role using the available tools
@@ -248,7 +289,7 @@ plan_agent2 = Agent(
 # Create the DoAgent with tools
 do_agent = Agent(
     name="DoAgent",
-    model="gemma-3-27b-it",
+    model="gemini-1.5-flash",
     instruction="""You are a professional test specialist. Your role is to:
     1. Look at the learning path that was selected
     2. Research additional context about that specific learning path using the available tools
@@ -272,7 +313,7 @@ do_agent = Agent(
 # Create the GoAgent with tools
 go_agent = Agent(
     name="GoAgent",
-    model="gemma-3-27b-it",
+    model="gemini-1.5-flash",
     instruction="""You are a project specialist. Your role is to:
     1. Look at the test result that was selected
     2. Research additional context about that specific test result using the available tools
@@ -311,7 +352,7 @@ do_pipeline = SequentialAgent(
 # Create the Root Agent (orchestrator) that uses the sequential pipeline
 root_agent = Agent(
     name="PlanMasterAgent",
-    model="gemma-3-27b-it",
+    model="gemini-1.5-flash",
     instruction="""You are the Plan Master Agent. Your role is to coordinate plan creation.
 
     When a user provides passion:
@@ -336,6 +377,7 @@ root_agent = Agent(
 )
 
 
+@retry_on_overload(max_retries=5, initial_delay=3, backoff_factor=2)
 def run_agent_sync(user_prompt: str):
     """Synchronous function to run the agent with a user prompt."""
 
