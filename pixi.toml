@@ -1,0 +1,17 @@
+[workspace]
+channels = ["conda-forge"]
+name = "sythesis"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "==3.10"
+
+[pypi-dependencies]
+google-adk = ">=0.1.0"
+google-genai = ">=0.1.0"
+opik = ">=0.1.0"
+python-dotenv = ">=1.0.0"
+rich = ">=13.0.0"
