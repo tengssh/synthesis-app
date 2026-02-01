@@ -129,6 +129,30 @@ class UserProgress:
         total_score = sum(r['score'] for r in self.test_results)
         total_possible = sum(r['total'] for r in self.test_results)
         return (total_score / total_possible * 100) if total_possible > 0 else 0.0
+    
+    @classmethod
+    def load_from_json(cls, filename: str = "synthesis_results.json") -> 'UserProgress':
+        """Load progress from JSON file."""
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+            progress = cls(
+                passion=data.get('passion', ''),
+                available_roles=data.get('available_roles', []),
+                selected_role=data.get('selected_role', ''),
+                learning_path=data.get('learning_path', []),
+                completed_topics=data.get('completed_topics', []),
+                test_results=data.get('test_results', []),
+                badge_earned=data.get('badge_earned', False),
+                badge_level=data.get('badge_level', ''),
+                timestamp=data.get('timestamp', datetime.now().isoformat())
+            )
+            return progress
+        except FileNotFoundError:
+            return None
+        except json.JSONDecodeError:
+            console.print("[red]Error: Invalid JSON file.[/red]")
+            return None
 
 
 # ============================================================================
@@ -200,14 +224,17 @@ def display_menu(title: str, options: List[str], allow_exit: bool = True) -> int
 
 
 def display_badge(progress: UserProgress):
-    """Display achievement badge in terminal."""
+    """Display achievement badge using compact Rich Table in a Panel."""
     avg_score = progress.calculate_average_score()
+    completed_count = len(progress.completed_topics)
+    total_topics = len(progress.learning_path) if progress.learning_path else 1
+    completion_ratio = completed_count / total_topics
     
-    # Determine badge level
-    if avg_score >= 90:
+    # Determine badge level based on BOTH score AND topic completion
+    if avg_score >= 90 and completion_ratio >= 0.8:
         badge_level = "🏆 GOLD"
         badge_color = "yellow"
-    elif avg_score >= 70:
+    elif avg_score >= 70 and completion_ratio >= 0.5:
         badge_level = "🥈 SILVER"
         badge_color = "white"
     else:
@@ -217,38 +244,40 @@ def display_badge(progress: UserProgress):
     progress.badge_level = badge_level
     progress.badge_earned = True
     
-    badge_content = f"""
-[bold {badge_color}]
-╔══════════════════════════════════════════════════╗
-║           🎓 ACHIEVEMENT UNLOCKED 🎓              ║
-╠══════════════════════════════════════════════════╣
-║                                                  ║
-║  Badge Level: {badge_level:<33} ║
-║                                                  ║
-║  Role: {progress.selected_role[:40]:<41} ║
-║  Topics Completed: {len(progress.completed_topics):<28} ║
-║  Average Score: {avg_score:.1f}%{' '*30} ║
-║  Date: {progress.timestamp[:10]:<40} ║
-║                                                  ║
-╚══════════════════════════════════════════════════╝
-[/bold {badge_color}]
-"""
-    console.print(Panel(badge_content, title="🏅 Your Badge", border_style=badge_color))
+    role_display = progress.selected_role[:35] if len(progress.selected_role) > 35 else progress.selected_role
+    
+    # Compact table inside panel
+    from rich.box import SIMPLE
+    table = Table(show_header=False, box=SIMPLE, padding=(0, 1), expand=False)
+    table.add_column("Label", style="dim", width=18)
+    table.add_column("Value", style=f"bold {badge_color}")
+    
+    table.add_row("Badge Level", badge_level)
+    table.add_row("Role", role_display)
+    table.add_row("Topics Completed", f"{completed_count}/{total_topics}")
+    table.add_row("Average Score", f"{avg_score:.1f}%")
+    table.add_row("Date", progress.timestamp[:10])
+    
+    console.print(Panel(table, title="🎓 ACHIEVEMENT UNLOCKED", border_style=badge_color, expand=False))
+
 
 
 def display_progress_table(progress: UserProgress):
     """Display progress summary as a table."""
     table = Table(title="📊 Your Progress Summary", show_header=True, header_style="bold cyan")
     table.add_column("Topic", style="dim")
+    table.add_column("Type", justify="center")
     table.add_column("Score", justify="center")
     table.add_column("Status", justify="center")
     
     for result in progress.test_results:
         status = "✅ Pass" if result['passed'] else "❌ Fail"
         score_str = f"{result['score']}/{result['total']}"
-        table.add_row(result['topic'], score_str, status)
+        test_type = "🔄 Challenge" if result.get('is_challenge', False) else "📝 Test"
+        table.add_row(result['topic'], test_type, score_str, status)
     
     console.print(table)
+
 
 
 # ============================================================================
@@ -311,7 +340,9 @@ def create_agents():
         2. [Role Name 2] - Brief description
         3. [Role Name 3] - Brief description
         
-        Also include market analysis before the roles list.""",
+        Also include market analysis before the roles list.
+        
+        STYLE: Be direct and user-friendly. Present information clearly without explaining your reasoning process.""",
         output_key="market_analysis",
         tools=[search_job_market, get_top_3_roles],
         before_agent_callback=opik_tracer.before_agent_callback,
@@ -340,7 +371,9 @@ def create_agents():
         3. Topic 3
         ... (up to 7 topics)
         
-        Include brief descriptions for each topic.""",
+        Include brief descriptions for each topic.
+        
+        STYLE: Be direct and user-friendly. Start with the content immediately - do NOT say things like "Okay, here's..." or "Based on the returned result...". Just present the learning path clearly.""",
         output_key="learning_path",
         tools=[search_learning_path],
         before_agent_callback=opik_tracer.before_agent_callback,
@@ -357,6 +390,11 @@ def create_agents():
         model="gemma-3-27b-it",
         instruction="""You are a test specialist. Generate a multiple choice test.
         
+        CRITICAL: The test questions MUST be relevant to the ROLE and TOPIC specified.
+        For example:
+        - If the role is "Freelance Illustrator" and topic is "Fundamentals", ask about illustration fundamentals (color theory, composition, drawing basics).
+        - If the role is "Data Scientist" and topic is "Fundamentals", ask about data science fundamentals (statistics, pandas, data cleaning).
+        
         OUTPUT FORMAT (REQUIRED):
         Generate exactly 5 questions in this format:
         
@@ -370,7 +408,7 @@ def create_agents():
         Q2: [Question text]
         ... and so on for all 5 questions.
         
-        Make questions challenging but fair.""",
+        Make questions challenging but fair, and ALWAYS relevant to the specific role and topic.""",
         output_key="test_questions",
         tools=[generate_test_questions],
         before_agent_callback=opik_tracer.before_agent_callback,
@@ -388,16 +426,19 @@ def create_agents():
         instruction="""You are a career development specialist. Based on the user's role and completed topics:
         
         For COMMUNITY requests:
-        - List relevant online communities (Discord, Slack, Reddit)
+        - List relevant online communities (Discord, Slack, Reddit) with direct links if possible
         - Suggest professional networks and meetups
         - Recommend conferences and events
+        - Include specific subreddit names, Discord server names, or Slack workspace names
         
         For PROJECT requests:
         - Generate a detailed project plan in markdown format
         - Include project goals, milestones, and deliverables
         - Suggest technologies and resources needed
         
-        Be specific and actionable.""",
+        IMPORTANT: Provide complete, actionable information. Do NOT ask follow-up questions.
+        Do NOT end your response with questions like "What area are you focused on?" or "What is your experience level?"
+        Give comprehensive recommendations based on the information provided.""",
         output_key="career_guidance",
         tools=[find_community_resources, generate_project_ideas],
         before_agent_callback=opik_tracer.before_agent_callback,
@@ -562,8 +603,7 @@ def parse_test_and_run(test_response: str, topic: str) -> dict:
         'topic': topic,
         'score': score,
         'total': total,
-        'passed': passed,
-        'answers': user_answers
+        'passed': passed
     }
 
 
@@ -575,165 +615,262 @@ def main():
     """Main function running the interactive multi-step workflow."""
     display_header()
     
-    # Initialize progress tracking
-    progress = UserProgress()
-    
     # Create agents
     plan_agent1, plan_agent2, do_agent, go_agent = create_agents()
     
+    # Check for existing progress file
+    progress = None
+    resume_mode = False
+    
+    if os.path.exists("synthesis_results.json"):
+        console.print("[dim]Previous progress file found.[/dim]")
+        startup_choice = display_menu("How would you like to start?", [
+            "🆕 Start fresh (new session)",
+            "📂 Resume from previous progress"
+        ], allow_exit=True)
+        
+        if startup_choice == -1:
+            console.print("[yellow]Goodbye![/yellow]")
+            return
+        elif startup_choice == 0:
+            # Start fresh - archive old files with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Archive existing JSON
+            if os.path.exists("synthesis_results.json"):
+                archived_name = f"synthesis_results_{timestamp}.json"
+                os.rename("synthesis_results.json", archived_name)
+                console.print(f"[dim]Previous results archived to: {archived_name}[/dim]")
+            
+            # Archive existing project plan if exists
+            if os.path.exists("project_plan.md"):
+                archived_plan = f"project_plan_{timestamp}.md"
+                os.rename("project_plan.md", archived_plan)
+                console.print(f"[dim]Previous project plan archived to: {archived_plan}[/dim]")
+            
+            progress = UserProgress()
+        else:
+            # Resume from previous progress
+            progress = UserProgress.load_from_json()
+            if progress and progress.passion and progress.selected_role and progress.learning_path:
+                resume_mode = True
+                console.print(f"[green]✓ Loaded progress for:[/green] {progress.passion}")
+                console.print(f"[dim]  Role: {progress.selected_role}[/dim]")
+                console.print(f"[dim]  Completed topics: {len(progress.completed_topics)}/{len(progress.learning_path)}[/dim]")
+            else:
+                console.print("[yellow]Could not load valid progress. Starting fresh.[/yellow]")
+                progress = UserProgress()
+    else:
+        progress = UserProgress()
+    
     try:
-        # =====================================================================
-        # Step 1: Get passion and generate roles
-        # =====================================================================
-        console.print("[bold cyan]Step 1: Discover Your Path[/bold cyan]")
-        passion = console.input("\n[yellow]Enter your passion or interests:[/yellow] ").strip()
-        
-        if not passion:
-            console.print("[red]No passion provided. Exiting.[/red]")
-            return
-        
-        progress.passion = passion
-        
-        console.print("\n[dim]Analyzing job market and generating roles...[/dim]")
-        with console.status("[bold green]Thinking...", spinner="dots"):
-            roles_response = run_agent(
-                plan_agent1, 
-                f"Analyze the job market for someone passionate about: {passion}. Generate the top 3 roles."
-            )
-        
-        console.print(Panel(Markdown(roles_response), title="📊 Market Analysis", border_style="green"))
-        
-        # Extract roles
-        roles = extract_roles_from_response(roles_response)
-        progress.available_roles = roles
-        
-        # =====================================================================
-        # Step 2: Select role
-        # =====================================================================
-        console.print("\n[bold cyan]Step 2: Choose Your Role[/bold cyan]")
-        role_idx = display_menu("Select a Role", roles)
-        
-        if role_idx == -1:
-            console.print("[yellow]Exiting...[/yellow]")
-            return
-        
-        selected_role = roles[role_idx]
-        progress.selected_role = selected_role
-        console.print(f"\n[green]✓ Selected:[/green] {selected_role}")
-        
-        # =====================================================================
-        # Step 3: Generate learning path
-        # =====================================================================
-        console.print("\n[bold cyan]Step 3: Your Learning Path[/bold cyan]")
-        
-        with console.status("[bold green]Generating learning path...", spinner="dots"):
-            path_response = run_agent(
-                plan_agent2,
-                f"Create a learning path for becoming a {selected_role}. List the key topics to master."
-            )
-        
-        console.print(Panel(Markdown(path_response), title="🗺️ Learning Path", border_style="blue"))
-        
-        # Extract topics
-        topics = extract_topics_from_response(path_response)
-        progress.learning_path = topics
-        
-        # =====================================================================
-        # Step 4: Learning loop - select topics and take tests
-        # =====================================================================
-        console.print("\n[bold cyan]Step 4: Learn and Test[/bold cyan]")
-        
-        while True:
-            remaining_topics = [t for t in topics if t not in progress.completed_topics]
+        # Skip Steps 1-3 if resuming
+        if not resume_mode:
+            # =================================================================
+            # Step 1: Get passion and generate roles
+            # =================================================================
+            console.print("[bold cyan]Step 1: Discover Your Path[/bold cyan]")
+            passion = console.input("\n[yellow]Enter your passion or interests:[/yellow] ").strip()
             
-            if not remaining_topics:
-                console.print("\n[green]🎉 Congratulations! You've completed all topics![/green]")
-                break
+            if not passion:
+                console.print("[red]No passion provided. Exiting.[/red]")
+                return
             
-            menu_options = remaining_topics + ["📊 View Progress", "🏁 Finish & Get Badge"]
-            topic_idx = display_menu("Select a Topic to Study", menu_options)
+            progress.passion = passion
             
-            if topic_idx == -1:
-                break
-            elif menu_options[topic_idx] == "📊 View Progress":
-                if progress.test_results:
-                    display_progress_table(progress)
-                else:
-                    console.print("[dim]No tests completed yet.[/dim]")
-                continue
-            elif menu_options[topic_idx] == "🏁 Finish & Get Badge":
-                break
-            
-            # Selected a topic - generate and run test
-            selected_topic = remaining_topics[topic_idx]
-            console.print(f"\n[bold]Preparing test for: {selected_topic}[/bold]")
-            
-            with console.status("[bold green]Generating test...", spinner="dots"):
-                test_response = run_agent(
-                    do_agent,
-                    f"Generate a 5-question multiple choice test for the topic: {selected_topic}"
+            console.print("\n[dim]Analyzing job market and generating roles...[/dim]")
+            with console.status("[bold green]Thinking...", spinner="dots"):
+                roles_response = run_agent(
+                    plan_agent1, 
+                    f"Analyze the job market for someone passionate about: {passion}. Generate the top 3 roles."
                 )
             
-            # Run interactive test
-            result = parse_test_and_run(test_response, selected_topic)
-            progress.test_results.append(result)
+            console.print(Panel(Markdown(roles_response), title="📊 Market Analysis", border_style="green"))
             
-            if result['passed']:
-                progress.completed_topics.append(selected_topic)
-                console.print(f"\n[green]✓ Topic '{selected_topic}' completed![/green]")
-            else:
-                console.print(f"\n[yellow]You can retry this topic later.[/yellow]")
+            # Extract roles
+            roles = extract_roles_from_response(roles_response)
+            progress.available_roles = roles
+            
+            # =================================================================
+            # Step 2: Select role
+            # =================================================================
+            console.print("\n[bold cyan]Step 2: Choose Your Role[/bold cyan]")
+            role_idx = display_menu("Select a Role", roles)
+            
+            if role_idx == -1:
+                console.print("[yellow]Exiting...[/yellow]")
+                return
+            
+            selected_role = roles[role_idx]
+            progress.selected_role = selected_role
+            console.print(f"\n[green]✓ Selected:[/green] {selected_role}")
+            
+            # =================================================================
+            # Step 3: Generate learning path
+            # =================================================================
+            console.print("\n[bold cyan]Step 3: Your Learning Path[/bold cyan]")
+            
+            with console.status("[bold green]Generating learning path...", spinner="dots"):
+                path_response = run_agent(
+                    plan_agent2,
+                    f"Create a learning path for becoming a {selected_role}. List the key topics to master."
+                )
+            
+            console.print(Panel(Markdown(path_response), title="🗺️ Learning Path", border_style="blue"))
+            
+            # Extract topics
+            topics = extract_topics_from_response(path_response)
+            progress.learning_path = topics
+        else:
+            # Resume mode - use stored learning path
+            topics = progress.learning_path
+            console.print(f"\n[bold cyan]Resuming: Learn and Test[/bold cyan]")
+            console.print(f"[dim]Role: {progress.selected_role}[/dim]")
+            console.print(f"[dim]Topics: {', '.join(topics)}[/dim]")
         
-        # =====================================================================
-        # Step 5: Generate badge and save results
-        # =====================================================================
-        if progress.test_results:
-            console.print("\n[bold cyan]Step 5: Your Achievement[/bold cyan]")
-            display_badge(progress)
-            display_progress_table(progress)
-            progress.save_to_json()
-        
-        # =====================================================================
-        # Step 6: Final options - Community or Project
-        # =====================================================================
-        console.print("\n[bold cyan]Step 6: What's Next?[/bold cyan]")
-        
+        # Outer loop to allow returning from Step 6 to Step 4
         while True:
-            final_choice = display_menu("Choose Your Next Step", [
-                "🌐 Find Community",
-                "📋 Generate Project Plan",
-                "💾 Save Results Again",
-                "🚪 Exit"
-            ], allow_exit=False)
+            # =====================================================================
+            # Step 4: Learning loop - select topics and take tests
+            # =====================================================================
+            console.print("\n[bold cyan]Step 4: Learn and Test[/bold cyan]")
             
-            if final_choice == 0:  # Find Community
-                with console.status("[bold green]Finding communities...", spinner="dots"):
-                    community_response = run_agent(
-                        go_agent,
-                        f"Find communities and networking opportunities for a {progress.selected_role} with skills in: {', '.join(progress.completed_topics)}"
-                    )
-                console.print(Panel(Markdown(community_response), title="🌐 Community Resources", border_style="cyan"))
-            
-            elif final_choice == 1:  # Generate Project
-                with console.status("[bold green]Generating project plan...", spinner="dots"):
-                    project_response = run_agent(
-                        go_agent,
-                        f"Generate a detailed project plan for a {progress.selected_role} to apply skills in: {', '.join(progress.completed_topics)}"
-                    )
-                console.print(Panel(Markdown(project_response), title="📋 Project Plan", border_style="magenta"))
+            while True:
+                remaining_topics = [t for t in topics if t not in progress.completed_topics]
+
                 
-                # Save project plan
-                project_filename = "project_plan.md"
-                with open(project_filename, 'w') as f:
-                    f.write(f"# Project Plan for {progress.selected_role}\n\n")
-                    f.write(project_response)
-                console.print(f"[green]✓ Project plan saved to {project_filename}[/green]")
+                # Build menu options
+                menu_options = remaining_topics.copy()
+                
+                # Add Challenge option if there are completed topics
+                if progress.completed_topics:
+                    menu_options.append("🔄 Challenge (Re-test completed topics)")
+                
+                menu_options.extend(["📊 View Progress", "🏁 Finish & Get Badge"])
+                
+                # Check if all topics done
+                if not remaining_topics and not progress.completed_topics:
+                    console.print("\n[yellow]No topics available.[/yellow]")
+                    break
+                elif not remaining_topics:
+                    console.print("\n[green]🎉 All topics completed! You can still challenge yourself or finish.[/green]")
+                
+                topic_idx = display_menu("Select a Topic to Study", menu_options)
+                
+                if topic_idx == -1:
+                    break
+                
+                selected_option = menu_options[topic_idx]
+                
+                if selected_option == "📊 View Progress":
+                    if progress.test_results:
+                        display_progress_table(progress)
+                    else:
+                        console.print("[dim]No tests completed yet.[/dim]")
+                    continue
+                elif selected_option == "🏁 Finish & Get Badge":
+                    break
+                elif selected_option == "🔄 Challenge (Re-test completed topics)":
+                    # Show completed topics for challenge
+                    challenge_idx = display_menu("Select a Topic to Challenge", progress.completed_topics)
+                    if challenge_idx == -1:
+                        continue
+                    selected_topic = progress.completed_topics[challenge_idx]
+                    is_challenge = True
+                else:
+                    # Selected a new topic
+                    selected_topic = selected_option
+                    is_challenge = False
+                
+                console.print(f"\n[bold]{'🔄 Challenge' if is_challenge else '📝 Test'} for: {selected_topic}[/bold]")
+                
+                with console.status("[bold green]Generating test...", spinner="dots"):
+                    test_response = run_agent(
+                        do_agent,
+                        f"Generate a 5-question multiple choice test for role: {progress.selected_role}, topic: {selected_topic}. Questions must be specific to this role and topic combination."
+                    )
+                
+                # Run interactive test
+                result = parse_test_and_run(test_response, selected_topic)
+                
+                # Mark as challenge attempt if applicable
+                if is_challenge:
+                    result['is_challenge'] = True
+                
+                progress.test_results.append(result)
+                
+                if result['passed']:
+                    if not is_challenge and selected_topic not in progress.completed_topics:
+                        progress.completed_topics.append(selected_topic)
+                    console.print(f"\n[green]✓ {'Challenge' if is_challenge else 'Topic'} '{selected_topic}' completed![/green]")
+                else:
+                    console.print(f"\n[yellow]You can retry this topic later.[/yellow]")
+
             
-            elif final_choice == 2:  # Save Results
+            # =====================================================================
+            # Step 5: Generate badge and save results
+            # =====================================================================
+            if progress.test_results:
+                console.print("\n[bold cyan]Step 5: Your Achievement[/bold cyan]")
+                display_badge(progress)
+                display_progress_table(progress)
                 progress.save_to_json()
             
-            else:  # Exit
+            # =====================================================================
+            # Step 6: Final options - Community or Project
+            # =====================================================================
+            console.print("\n[bold cyan]Step 6: What's Next?[/bold cyan]")
+            
+            goto_topics = False
+            while True:
+                final_choice = display_menu("Choose Your Next Step", [
+                    "🌐 Find Community",
+                    "📋 Generate Project Plan",
+                    "🔄 Back to Topics (test more)",
+                    "🏅 View Badge",
+                    "🚪 Exit"
+                ], allow_exit=False)
+                
+                if final_choice == 0:  # Find Community
+                    with console.status("[bold green]Finding communities...", spinner="dots"):
+                        community_response = run_agent(
+                            go_agent,
+                            f"Find communities and networking opportunities for a {progress.selected_role} with skills in: {', '.join(progress.completed_topics)}"
+                        )
+                    console.print(Panel(Markdown(community_response), title="🌐 Community Resources", border_style="cyan"))
+                
+                elif final_choice == 1:  # Generate Project
+                    with console.status("[bold green]Generating project plan...", spinner="dots"):
+                        project_response = run_agent(
+                            go_agent,
+                            f"Generate a detailed project plan for a {progress.selected_role} to apply skills in: {', '.join(progress.completed_topics)}"
+                        )
+                    console.print(Panel(Markdown(project_response), title="📋 Project Plan", border_style="magenta"))
+                    
+                    # Save project plan
+                    project_filename = "project_plan.md"
+                    with open(project_filename, 'w') as f:
+                        f.write(f"# Project Plan for {progress.selected_role}\n\n")
+                        f.write(project_response)
+                    console.print(f"[green]✓ Project plan saved to {project_filename}[/green]")
+                
+                elif final_choice == 2:  # Back to Topics
+                    console.print("\n[cyan]Returning to topic selection...[/cyan]")
+                    goto_topics = True
+                    break
+                
+                elif final_choice == 3:  # View Badge
+                    display_badge(progress)
+                    display_progress_table(progress)
+                
+                else:  # Exit
+                    goto_topics = False
+                    break
+            
+            # If not going back to topics, exit the outer loop
+            if not goto_topics:
                 break
+
         
         console.print("\n[bold green]✅ Thank you for using Synthesis App![/bold green]")
         console.print("[dim]Check your Opik dashboard for detailed traces.[/dim]")
