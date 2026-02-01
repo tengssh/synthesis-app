@@ -282,9 +282,9 @@ def run_optimization(prompt_key: str = "plan_agent2"):
             os.environ["OPENAI_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
             os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
         
-        # Initialize optimizer with OpenRouter model
+        # Initialize optimizer with free OpenRouter model
         optimizer = MetaPromptOptimizer(
-            model="openrouter/anthropic/claude-3.5-sonnet",
+            model="openrouter/meta-llama/llama-3.2-3b-instruct:free",
             verbose=1
         )
         
