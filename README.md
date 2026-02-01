@@ -29,6 +29,9 @@ An interactive multi-agent application that helps you discover career paths, cre
 # Run the interactive CLI app
 pixi run cli
 
+# Run the Streamlit web app
+pixi run web
+
 # Clean generated files (results, project plans, optimized prompts)
 pixi run clean
 ```
