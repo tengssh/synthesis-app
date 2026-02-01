@@ -5,8 +5,8 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
-app = "python synthesis_app.py"
-clean = "rm -f synthesis_results.json project_plan.md"
+cli = "python synthesis_app.py"
+clean = "rm -f synthesis_results*.json project_plan*.md"
 
 [dependencies]
 python = "==3.10"
