@@ -1,0 +1,194 @@
+---
+# Opik Online Evaluation Configuration for Synthesis App
+# Defines evaluation criteria for assessing agent output quality
+
+evaluations:
+  - name: role_relevance
+    description: "Evaluates if suggested job roles are relevant to the user's stated passion"
+    type: llm_judge
+    model: gpt-4
+    prompt: |
+      You are a career counselor. Evaluate if the suggested job roles are relevant and realistic for someone with the stated passion/interests.
+
+      Consider:
+      - Direct relevance to the passion
+      - Market viability of the roles
+      - Variety and diversity of suggestions
+      - Realistic career progression
+
+      INPUT (User's Passion):
+      {{input}}
+
+      OUTPUT (Suggested Roles):
+      {{output}}
+
+      EVALUATION FORMAT:
+      Relevance Score: [1-10]
+      Reasoning: [One sentence explaining the score]
+
+    scoring:
+      type: numeric
+      min: 1
+      max: 10
+
+    metadata:
+      category: role_generation
+      importance: high
+
+  - name: learning_path_quality
+    description: "Evaluates the quality and structure of the generated learning path"
+    type: llm_judge
+    model: gpt-4
+    prompt: |
+      You are an education specialist. Evaluate the learning path for logical progression and completeness.
+
+      Consider:
+      - Logical topic ordering (fundamentals first)
+      - Coverage of essential skills
+      - Appropriate scope (not too broad/narrow)
+      - Clear progression from beginner to advanced
+
+      INPUT (Selected Role):
+      {{input}}
+
+      OUTPUT (Learning Path):
+      {{output}}
+
+      EVALUATION FORMAT:
+      Quality Score: [1-10]
+      Reasoning: [One sentence explaining the score]
+
+    scoring:
+      type: numeric
+      min: 1
+      max: 10
+
+    metadata:
+      category: learning_path
+      importance: high
+
+  - name: test_question_relevance
+    description: "Evaluates if test questions are relevant to the role and topic"
+    type: llm_judge
+    model: gpt-4
+    prompt: |
+      You are a test design expert. Evaluate if the test questions are appropriate for the specified role and topic.
+
+      Consider:
+      - Questions must be specific to the ROLE (not generic)
+      - Questions must match the TOPIC difficulty level
+      - Answers should be unambiguous
+      - Questions should test practical knowledge
+
+      INPUT (Role + Topic):
+      {{input}}
+
+      OUTPUT (Test Questions):
+      {{output}}
+
+      EVALUATION FORMAT:
+      Relevance Score: [1-10]
+      Issues: [List any off-topic or irrelevant questions, or "None"]
+
+    scoring:
+      type: numeric
+      min: 1
+      max: 10
+
+    metadata:
+      category: test_generation
+      importance: critical
+
+  - name: community_recommendation_quality
+    description: "Evaluates the quality of community and resource recommendations"
+    type: llm_judge
+    model: gpt-4
+    prompt: |
+      You are a professional networking expert. Evaluate the community recommendations.
+
+      Consider:
+      - Specificity (actual community names, not generic advice)
+      - Relevance to the role
+      - Variety of platforms (Discord, Reddit, conferences, etc.)
+      - Actionable information (links, specific names)
+
+      INPUT (Role + Skills):
+      {{input}}
+
+      OUTPUT (Community Recommendations):
+      {{output}}
+
+      EVALUATION FORMAT:
+      Quality Score: [1-10]
+      Reasoning: [One sentence explaining the score]
+
+    scoring:
+      type: numeric
+      min: 1
+      max: 10
+
+    metadata:
+      category: community
+      importance: medium
+
+  - name: project_plan_completeness
+    description: "Checks if project plans contain all necessary components"
+    type: heuristic
+    rules:
+      - check: contains_goals
+        description: "Project must include clear goals/objectives"
+        weight: 25
+
+      - check: contains_milestones
+        description: "Project must include milestones or timeline"
+        weight: 25
+
+      - check: contains_deliverables
+        description: "Project must include deliverables"
+        weight: 20
+
+      - check: contains_technologies
+        description: "Project should list technologies/tools needed"
+        weight: 15
+
+      - check: contains_resources
+        description: "Project should include learning resources"
+        weight: 15
+
+    scoring:
+      type: percentage
+      min: 0
+      max: 100
+
+    metadata:
+      category: project_planning
+      importance: high
+
+  - name: output_style_check
+    description: "Checks that agent outputs are direct and user-friendly"
+    type: llm_judge
+    model: gpt-4
+    prompt: |
+      Evaluate if the output is direct and user-friendly without unnecessary preambles.
+
+      RED FLAGS (should not contain):
+      - "Okay, here's..."
+      - "Based on the returned result..."
+      - Explaining internal reasoning
+      - Meta-commentary about the task
+
+      OUTPUT:
+      {{output}}
+
+      EVALUATION FORMAT:
+      Style Score: [1-10]
+      Issues: [List any style issues, or "Clean output"]
+
+    scoring:
+      type: numeric
+      min: 1
+      max: 10
+
+    metadata:
+      category: style
+      importance: medium

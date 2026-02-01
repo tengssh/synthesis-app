@@ -6,6 +6,13 @@ version = "0.1.0"
 
 [tasks]
 cli = "python synthesis_app.py"
+eval = "python synthesis_eval.py"
+eval-legacy = "python synthesis_eval.py --legacy"
+opt-list = "python synthesis_optimize.py"
+opt-role = "python synthesis_optimize.py plan_agent1"
+opt-learn = "python synthesis_optimize.py plan_agent2"
+opt-do = "python synthesis_optimize.py do_agent"
+opt-go = "python synthesis_optimize.py go_agent"
 clean = "rm -f synthesis_results*.json project_plan*.md"
 
 [dependencies]
@@ -15,5 +22,7 @@ python = "==3.10"
 google-adk = ">=0.1.0"
 google-genai = ">=0.1.0"
 opik = ">=0.1.0"
+opik-optimizer = ">=0.0.1"
 python-dotenv = ">=1.0.0"
 rich = ">=13.0.0"
+pyyaml = ">=6.0.0"
