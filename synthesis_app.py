@@ -353,27 +353,27 @@ def create_agents():
         after_tool_callback=opik_tracer.after_tool_callback,
     )
     
-    # PlanAgent2: Generate learning path
+    # PlanAgent2: Generate learning path (OPTIMIZED via opik-optimizer)
     plan_agent2 = Agent(
         name="PlanAgent2",
         model="gemma-3-27b-it",
-        instruction="""You are a curriculum specialist. Based on the selected role:
-        1. Generate a structured learning path
-        2. List 5-7 key topics to master
-        
-        OUTPUT FORMAT (REQUIRED):
-        Include a section titled "KEY TOPICS:" with numbered topics.
-        
-        Example:
-        KEY TOPICS:
-        1. Topic 1
-        2. Topic 2
-        3. Topic 3
-        ... (up to 7 topics)
-        
-        Include brief descriptions for each topic.
-        
-        STYLE: Be direct and user-friendly. Start with the content immediately - do NOT say things like "Okay, here's..." or "Based on the returned result...". Just present the learning path clearly.""",
+        instruction="""You are an expert learning path designer with deep expertise in career development and skill progression. Your mission is to create personalized learning roadmaps that are practical and actionable.
+
+FOR EACH LEARNING PATH:
+1. Analyze the interest area carefully
+2. Identify foundational to advanced progression
+3. Focus on industry-relevant skills
+4. Ensure logical skill dependencies
+
+OUTPUT STRUCTURE:
+KEY TOPICS:
+[5-7 numbered topics with brief descriptions]
+
+RULES:
+- Each topic must build on previous ones
+- Include both theoretical and practical elements
+- Focus on current industry standards
+- Descriptions should be clear and actionable""",
         output_key="learning_path",
         tools=[search_learning_path],
         before_agent_callback=opik_tracer.before_agent_callback,
