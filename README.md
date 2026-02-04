@@ -18,7 +18,7 @@ An interactive multi-agent application that helps you discover career paths, cre
 - **Pixi** — Package manager (dependencies defined in `pixi.toml`)
 - **Python 3.10+**
 - **API Keys:**
-  - Google Gemini API key (`GOOGLE_API_KEY`) — required for CLI app
+  - Google Gemini API key (`GOOGLE_API_KEY`) — required for CLI and streamlit app
   - Opik API key (`OPIK_API_KEY`) — required for tracing
   - OpenRouter API key (`OPENROUTER_API_KEY`) — for prompt optimization
   - *Or* OpenAI API key (`OPENAI_API_KEY`) — alternative for prompt optimization
