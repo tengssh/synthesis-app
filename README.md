@@ -22,6 +22,13 @@ An interactive multi-agent application that helps you discover career paths, cre
   - Opik API key (`OPIK_API_KEY`) — required for tracing
   - OpenRouter API key (`OPENROUTER_API_KEY`) — for prompt optimization
   - *Or* OpenAI API key (`OPENAI_API_KEY`) — alternative for prompt optimization
+  - Set the API keys in `.env`
+    ```bash
+    GOOGLE_API_KEY=your_google_api_key
+    OPENROUTER_API_KEY=your_openrouter_api_key
+    OPIK_API_KEY=your_opik_api_key
+    OPIK_WORKSPACE=your_opik_workspace
+    ```
 
 ## Getting Started
 
