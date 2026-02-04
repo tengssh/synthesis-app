@@ -536,7 +536,7 @@ def render_step_roles():
 
 
 def render_step_learn():
-    """Step 3: Learning and testing."""
+    """Step 3: Learning and testing with Challenge Mode."""
     p = st.session_state.progress
     
     # Completed steps (collapsed)
@@ -551,57 +551,148 @@ def render_step_learn():
     st.markdown(f"### 📝 Learning Progress: {completed}/{total}")
     st.progress(completed / total if total > 0 else 0)
     
-    # Topics list with retry option for failed
+    # Topics list - numbered format
+    st.markdown("**Topics:**")
     remaining = [t for t in p.learning_path if t not in p.completed_topics]
-    failed_topics = []
+    passed_topics = []
     
-    for topic in p.learning_path:
+    for i, topic in enumerate(p.learning_path, 1):
         if topic in p.completed_topics:
-            result = next((r for r in p.test_results if r['topic'] == topic), None)
+            result = next((r for r in p.test_results if r['topic'] == topic and not r.get('is_challenge')), None)
             if result:
                 icon = "✅" if result['passed'] else "❌"
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    st.write(f"{icon} **{topic}** — Score: {result['score']}/{result['total']}")
-                with col2:
-                    if not result['passed']:
-                        failed_topics.append(topic)
-                        if st.button("🔄 Retry", key=f"retry_{topic}"):
-                            # Remove from completed to allow retry
-                            p.completed_topics.remove(topic)
-                            p.test_results = [r for r in p.test_results if r['topic'] != topic]
-                            st.rerun()
+                st.write(f"{i}. {icon} **{topic}** — Score: {result['score']}/{result['total']}")
+                if result['passed']:
+                    passed_topics.append(topic)
         else:
-            st.info(f"○ {topic}")
+            st.write(f"{i}. ○ {topic}")
     
-    # Show test options
-    test_options = remaining.copy()
+    st.markdown("---")
     
-    if test_options:
-        st.markdown("---")
-        st.markdown("### 🧪 Take a Test")
+    # Test options menu
+    st.markdown("### 🧪 Select Action")
+    
+    # Group topics into 3 levels
+    # Fundamentals = first topic, Core = middle topics, Advanced = last topic
+    n = len(p.learning_path)
+    if n >= 3:
+        level_topics = {
+            "1. Fundamentals": [p.learning_path[0]],
+            "2. Core Concepts": p.learning_path[1:-1],  # All middle topics
+            "3. Advanced Topics": [p.learning_path[-1]],
+        }
+    elif n == 2:
+        level_topics = {
+            "1. Fundamentals": [p.learning_path[0]],
+            "2. Advanced Topics": [p.learning_path[1]],
+        }
+    else:
+        level_topics = {f"1. {p.learning_path[0].split(' - ')[0]}": p.learning_path} if p.learning_path else {}
+    
+    def get_next_uncompleted(topics_list):
+        """Get next uncompleted topic in a level."""
+        for t in topics_list:
+            if t not in p.completed_topics:
+                return t
+        return None
+    
+    menu_options = []
+    
+    # Add levels that have uncompleted topics
+    for name, topics_list in level_topics.items():
+        next_topic = get_next_uncompleted(topics_list)
+        if next_topic:
+            menu_options.append(f"📝 {name}")
+    
+    # Add Challenge option if there are passed topics
+    if passed_topics:
+        menu_options.append("🔄 Challenge")
+    
+    # Add retry for failed (simplified)
+    failed_topics = [t for t in p.completed_topics 
+                     if any(r['topic'] == t and not r['passed'] and not r.get('is_challenge') 
+                            for r in p.test_results)]
+    if failed_topics:
+        menu_options.append("🔁 Retry Failed")
+    
+    if menu_options:
+        selected = st.selectbox("Choose action", menu_options, label_visibility="collapsed")
         
-        topic = st.selectbox("Select topic", test_options, label_visibility="collapsed")
+        # Handle Challenge Mode
+        if selected == "🔄 Challenge":
+            # Show passed topics as simple numbered list
+            challenge_options = [f"{i+1}. {t.split(' - ')[0]}" for i, t in enumerate(passed_topics)]
+            challenge_map = dict(zip(challenge_options, passed_topics))
+            challenge_selected = st.selectbox("Select topic", challenge_options, key="challenge_topic")
+            challenge_topic = challenge_map[challenge_selected]
+            if st.button("🔄 Start Challenge", type="primary"):
+                with st.status(f"Generating challenge...", expanded=True) as status:
+                    st.write("🧠 Creating questions...")
+                    tracer = get_opik_tracer()
+                    _, _, do_agent, _ = create_agents(tracer)
+                    
+                    response = run_agent(do_agent, f"Role: {p.selected_role}\nTopic: {challenge_topic}\nGenerate challenging test.")
+                    
+                    st.session_state.current_topic = challenge_topic
+                    st.session_state.current_questions = parse_questions(response, challenge_topic)
+                    st.session_state.is_challenge = True
+                    
+                    status.update(label="✅ Challenge ready!", state="complete")
+                st.rerun()
         
-        if st.button("📝 Start Test", type="primary"):
-            with st.status(f"Generating test for {topic}...", expanded=True) as status:
-                st.write("🧠 Creating questions...")
-                tracer = get_opik_tracer()
-                _, _, do_agent, _ = create_agents(tracer)
+        # Handle Retry Failed
+        elif selected == "🔁 Retry Failed":
+            retry_options = [f"{i+1}. {t.split(' - ')[0]}" for i, t in enumerate(failed_topics)]
+            retry_map = dict(zip(retry_options, failed_topics))
+            retry_selected = st.selectbox("Select topic", retry_options, key="retry_topic")
+            retry_topic = retry_map[retry_selected]
+            if st.button("� Retry Test", type="primary"):
+                # Remove previous attempt
+                p.completed_topics = [t for t in p.completed_topics if t != retry_topic]
+                p.test_results = [r for r in p.test_results if r['topic'] != retry_topic]
                 
-                response = run_agent(do_agent, f"Role: {p.selected_role}\nTopic: {topic}\nGenerate test.")
-                
-                st.session_state.current_topic = topic
-                st.session_state.current_questions = parse_questions(response, topic)
-                
-                status.update(label="✅ Test ready!", state="complete")
+                with st.status(f"Generating test...", expanded=True) as status:
+                    st.write("🧠 Creating questions...")
+                    tracer = get_opik_tracer()
+                    _, _, do_agent, _ = create_agents(tracer)
+                    
+                    response = run_agent(do_agent, f"Role: {p.selected_role}\nTopic: {retry_topic}\nGenerate test.")
+                    
+                    st.session_state.current_topic = retry_topic
+                    st.session_state.current_questions = parse_questions(response, retry_topic)
+                    st.session_state.is_challenge = False
+                    
+                    status.update(label="✅ Test ready!", state="complete")
+                st.rerun()
+        
+        # Handle normal test (📝 1. Fundamentals etc)
+        elif selected.startswith("📝"):
+            # Extract level name like "1. Fundamentals"
+            level_name = selected.replace("📝 ", "")
+            topics_list = level_topics.get(level_name, [])
+            topic = get_next_uncompleted(topics_list)
             
-            st.rerun()
+            if topic and st.button("📝 Start Test", type="primary"):
+                with st.status(f"Generating test...", expanded=True) as status:
+                    st.write("🧠 Creating questions...")
+                    tracer = get_opik_tracer()
+                    _, _, do_agent, _ = create_agents(tracer)
+                    
+                    response = run_agent(do_agent, f"Role: {p.selected_role}\nTopic: {topic}\nGenerate test.")
+                    
+                    st.session_state.current_topic = topic
+                    st.session_state.current_questions = parse_questions(response, topic)
+                    st.session_state.is_challenge = False
+                    
+                    status.update(label="✅ Test ready!", state="complete")
+                st.rerun()
     
     # If test is active
     if st.session_state.current_questions and st.session_state.current_topic:
         st.markdown("---")
-        st.markdown(f"### Test: {st.session_state.current_topic}")
+        is_challenge = getattr(st.session_state, 'is_challenge', False)
+        test_type = "🔄 Challenge" if is_challenge else "📝 Test"
+        st.markdown(f"### {test_type}: {st.session_state.current_topic}")
         
         questions = st.session_state.current_questions
         
@@ -614,13 +705,12 @@ def render_step_learn():
                     options=['A', 'B', 'C', 'D'],
                     format_func=lambda x, q=q: f"{x}) {q['options'].get(x, '')}",
                     key=f"q_{i}",
-                    horizontal=False,  # Vertical layout
+                    horizontal=False,
                     label_visibility="collapsed",
-                    index=None  # No default selection
+                    index=None
                 )
             
             if st.form_submit_button("✅ Submit", type="primary"):
-                # Check if all questions answered
                 unanswered = [i+1 for i, a in answers.items() if a is None]
                 if unanswered:
                     st.error(f"Please answer all questions. Missing: Q{', Q'.join(map(str, unanswered))}")
@@ -629,19 +719,24 @@ def render_step_learn():
                     total = len(questions)
                     passed = score >= total * 0.6
                     
-                    p.test_results.append({
+                    result = {
                         'topic': st.session_state.current_topic,
                         'score': score,
                         'total': total,
-                        'passed': passed
-                    })
-                    p.completed_topics.append(st.session_state.current_topic)
+                        'passed': passed,
+                        'is_challenge': is_challenge
+                    }
+                    p.test_results.append(result)
+                    
+                    if not is_challenge:
+                        p.completed_topics.append(st.session_state.current_topic)
                     
                     st.session_state.current_topic = ''
                     st.session_state.current_questions = []
+                    st.session_state.is_challenge = False
                     
                     if passed:
-                        st.success(f"🎉 Passed! {score}/{total}")
+                        st.success(f"🎉 {'Challenge' if is_challenge else 'Test'} Passed! {score}/{total}")
                     else:
                         st.warning(f"Score: {score}/{total}. Keep practicing!")
                     
@@ -676,7 +771,8 @@ def render_step_go():
         st.markdown("### 📊 Test Results")
         for r in p.test_results:
             icon = "✅" if r['passed'] else "❌"
-            st.write(f"{icon} **{r['topic']}**: {r['score']}/{r['total']}")
+            test_type = "🔄" if r.get('is_challenge') else "📝"
+            st.write(f"{icon} {test_type} **{r['topic']}**: {r['score']}/{r['total']}")
     
     st.markdown("---")
     
@@ -709,6 +805,15 @@ def render_step_go():
     if p.project_response:
         with st.expander("📋 Project Plan", expanded=True):
             st.markdown(p.project_response)
+            # Download project plan as markdown
+            project_md = f"# Project Plan for {p.selected_role}\n\n{p.project_response}"
+            st.download_button(
+                "📥 Download Project Plan",
+                project_md,
+                "project_plan.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
     
     st.markdown("---")
     
