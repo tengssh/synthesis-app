@@ -160,7 +160,8 @@ def init_session_state():
         'current_topic': '',
         'opik_tracer': None,
         'messages': [],  # Chat history
-        'agents_loaded': False
+        'agents_loaded': False,
+        'selected_model': 'gemma-3-27b-it'  # Default model
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -232,6 +233,9 @@ def generate_project_ideas(role: str, skills: list) -> str:
 def create_agents(tracer=None):
     Agent, _, _ = load_agents_module()
     
+    # Get selected model from session state
+    model = st.session_state.get('selected_model', 'gemma-3-27b-it')
+    
     callbacks = {}
     if tracer:
         callbacks = {
@@ -244,7 +248,7 @@ def create_agents(tracer=None):
         }
     
     plan_agent1 = Agent(
-        name="PlanAgent1", model="gemma-3-27b-it",
+        name="PlanAgent1", model=model,
         instruction="""You are a job market analysis agent. Based on the user's passion:
         1. Analyze the job market
         2. Generate EXACTLY 3 specific job roles
@@ -265,7 +269,7 @@ def create_agents(tracer=None):
     )
     
     plan_agent2 = Agent(
-        name="PlanAgent2", model="gemma-3-27b-it",
+        name="PlanAgent2", model=model,
         instruction="""You are a learning path designer. Create 5-7 numbered topics.
         
 OUTPUT:
@@ -280,7 +284,7 @@ Each topic builds on previous ones. Be practical and actionable.""",
     )
     
     do_agent = Agent(
-        name="DoAgent", model="gemma-3-27b-it",
+        name="DoAgent", model=model,
         instruction="""Generate exactly 5 multiple choice questions.
         
 FORMAT:
@@ -297,7 +301,7 @@ Questions must be specific to the role and topic. No placeholders.""",
     )
     
     go_agent = Agent(
-        name="GoAgent", model="gemma-3-27b-it",
+        name="GoAgent", model=model,
         instruction="""Career development specialist.
         
 For COMMUNITY: List Discord servers, subreddits, Slack groups with specific names.
@@ -450,11 +454,29 @@ def render_step_api():
         help="Get free: aistudio.google.com/apikey"
     )
     
+    # Model selection dropdown
+    model_options = [
+        "gemma-3-27b-it",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-3-pro-preview",
+        "gemini-3-flash-preview"
+    ]
+    selected_model = st.selectbox(
+        "🤖 Select Model",
+        options=model_options,
+        index=0,
+        help="Choose the AI model to use"
+    )
+    
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🚀 Start", type="primary", use_container_width=True, disabled=not api_key):
             os.environ["GOOGLE_API_KEY"] = api_key
             st.session_state.api_key_valid = True
+            st.session_state.selected_model = selected_model
             st.rerun()
     with col2:
         uploaded = st.file_uploader("📂 Resume", type=['json'], label_visibility="collapsed")

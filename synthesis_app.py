@@ -216,6 +216,8 @@ def display_menu(title: str, options: List[str], allow_exit: bool = True) -> int
     
     while True:
         choice = console.input("\n[yellow]Enter your choice:[/yellow] ").strip()
+        if choice == "" and not allow_exit:
+            return 0  # Default to first option
         if choice == "0" and allow_exit:
             return -1
         if choice.isdigit() and 1 <= int(choice) <= len(options):
@@ -320,13 +322,13 @@ def generate_project_ideas(role: str, skills: list) -> str:
 # Agent Definitions
 # ============================================================================
 
-def create_agents():
-    """Create and return all agents."""
+def create_agents(model: str = "gemma-3-27b-it"):
+    """Create and return all agents with specified model."""
     
     # PlanAgent1: Generate top 3 roles
     plan_agent1 = Agent(
         name="PlanAgent1",
-        model="gemma-3-27b-it",
+        model=model,
         instruction="""You are a job market analysis agent. Based on the user's passion:
         1. Analyze the job market
         2. Generate EXACTLY 3 specific job roles
@@ -356,7 +358,7 @@ def create_agents():
     # PlanAgent2: Generate learning path (OPTIMIZED via opik-optimizer)
     plan_agent2 = Agent(
         name="PlanAgent2",
-        model="gemma-3-27b-it",
+        model=model,
         instruction="""You are an expert learning path designer with deep expertise in career development and skill progression. Your mission is to create personalized learning roadmaps that are practical and actionable.
 
 FOR EACH LEARNING PATH:
@@ -387,7 +389,7 @@ RULES:
     # DoAgent: Generate tests
     do_agent = Agent(
         name="DoAgent",
-        model="gemma-3-27b-it",
+        model=model,
         instruction="""You are a test specialist. Generate a multiple choice test.
         
         CRITICAL: The test questions MUST be relevant to the ROLE and TOPIC specified.
@@ -422,7 +424,7 @@ RULES:
     # GoAgent: Community and projects
     go_agent = Agent(
         name="GoAgent",
-        model="gemma-3-27b-it",
+        model=model,
         instruction="""You are a career development specialist. Based on the user's role and completed topics:
         
         For COMMUNITY requests:
@@ -615,8 +617,22 @@ def main():
     """Main function running the interactive multi-step workflow."""
     display_header()
     
-    # Create agents
-    plan_agent1, plan_agent2, do_agent, go_agent = create_agents()
+    # Model selection (optional)
+    model_options = [
+        "gemma-3-27b-it",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-3-pro-preview",
+        "gemini-3-flash-preview"
+    ]
+    model_choice = display_menu("Select AI Model (Enter for default)", model_options, allow_exit=False)
+    selected_model = model_options[model_choice] if model_choice >= 0 else "gemma-3-27b-it"
+    console.print(f"[dim]Using model: {selected_model}[/dim]\n")
+    
+    # Create agents with selected model
+    plan_agent1, plan_agent2, do_agent, go_agent = create_agents(selected_model)
     
     # Check for existing progress file
     progress = None
