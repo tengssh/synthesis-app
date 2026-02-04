@@ -805,19 +805,41 @@ def render_step_go():
     with col1:
         if st.button("🌐 Find Community", use_container_width=True):
             with st.spinner("Finding communities..."):
-                tracer = get_opik_tracer()
-                _, _, _, go_agent = create_agents(tracer)
-                p.community_response = run_agent(go_agent, 
-                    f"Role: {p.selected_role}\nSkills: {', '.join(p.completed_topics)}\nFind communities.")
+                try:
+                    tracer = get_opik_tracer()
+                    _, _, _, go_agent = create_agents(tracer)
+                    response = run_agent(go_agent, 
+                        f"Role: {p.selected_role}\nSkills: {', '.join(p.completed_topics)}\nFind communities. Return as formatted markdown, not JSON.")
+                    # Parse if JSON returned
+                    try:
+                        data = json.loads(response)
+                        if isinstance(data, dict):
+                            response = "\n".join(f"- **{k}**: {v}" for k, v in data.items())
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                    p.community_response = response
+                except Exception as e:
+                    st.error(f"Error: {str(e)[:100]}. Try a different model.")
             st.rerun()
     
     with col2:
         if st.button("📋 Get Project Ideas", use_container_width=True):
             with st.spinner("Generating project..."):
-                tracer = get_opik_tracer()
-                _, _, _, go_agent = create_agents(tracer)
-                p.project_response = run_agent(go_agent,
-                    f"Role: {p.selected_role}\nSkills: {', '.join(p.completed_topics)}\nGenerate project plan.")
+                try:
+                    tracer = get_opik_tracer()
+                    _, _, _, go_agent = create_agents(tracer)
+                    response = run_agent(go_agent,
+                        f"Role: {p.selected_role}\nSkills: {', '.join(p.completed_topics)}\nGenerate project plan in markdown format.")
+                    # Parse if JSON returned
+                    try:
+                        data = json.loads(response)
+                        if isinstance(data, dict):
+                            response = "\n".join(f"## {k}\n{v}\n" for k, v in data.items())
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                    p.project_response = response
+                except Exception as e:
+                    st.error(f"Error: {str(e)[:100]}. Try a different model.")
             st.rerun()
     
     if p.community_response:
