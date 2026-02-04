@@ -14,7 +14,7 @@ opt-role = "python synthesis_optimize.py plan_agent1"
 opt-learn = "python synthesis_optimize.py plan_agent2"
 opt-do = "python synthesis_optimize.py do_agent"
 opt-go = "python synthesis_optimize.py go_agent"
-clean = "rm -f synthesis_results*.json project_plan*.md optimized*.txt"
+clean = "find . -maxdepth 1 \\( -name 'synthesis_results*.json' -o -name 'project_plan*.md' -o -name 'optimized*.txt' \\) -delete"
 
 
 [dependencies]
