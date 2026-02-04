@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [tasks]
 cli = "python synthesis_app.py"
+web = "streamlit run streamlit_app.py"
 eval = "python synthesis_eval.py"
 eval-legacy = "python synthesis_eval.py --legacy"
 opt-list = "python synthesis_optimize.py"
@@ -14,6 +15,7 @@ opt-learn = "python synthesis_optimize.py plan_agent2"
 opt-do = "python synthesis_optimize.py do_agent"
 opt-go = "python synthesis_optimize.py go_agent"
 clean = "rm -f synthesis_results*.json project_plan*.md optimized*.txt"
+
 
 [dependencies]
 python = "==3.10"
@@ -26,3 +28,4 @@ opik-optimizer = ">=0.0.1"
 python-dotenv = ">=1.0.0"
 rich = ">=13.0.0"
 pyyaml = ">=6.0.0"
+streamlit = ">=1.30.0"
