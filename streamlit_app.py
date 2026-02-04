@@ -460,9 +460,7 @@ def render_step_api():
         "gemini-2.0-flash",
         "gemini-2.5-flash",
         "gemini-1.5-pro",
-        "gemini-1.5-flash",
-        "gemini-3-pro-preview",
-        "gemini-3-flash-preview"
+        "gemini-1.5-flash"
     ]
     selected_model = st.selectbox(
         "🤖 Select Model",
@@ -541,18 +539,23 @@ def render_step_roles():
     for i, role in enumerate(p.available_roles):
         if st.button(f"👉 {role}", key=f"role_{i}", use_container_width=True):
             with st.status(f"Creating learning path for {role}...", expanded=True) as status:
-                st.write("📚 Designing curriculum...")
-                tracer = get_opik_tracer()
-                _, plan_agent2, _, _ = create_agents(tracer)
-                
-                st.write("🎓 Generating topics...")
-                response = run_agent(plan_agent2, f"Create learning path for: {role}")
-                
-                p.selected_role = role
-                p.learning_response = response
-                p.learning_path = extract_topics(response)
-                
-                status.update(label="✅ Learning path ready!", state="complete")
+                try:
+                    st.write("📚 Designing curriculum...")
+                    tracer = get_opik_tracer()
+                    _, plan_agent2, _, _ = create_agents(tracer)
+                    
+                    st.write("🎓 Generating topics...")
+                    response = run_agent(plan_agent2, f"Create learning path for: {role}")
+                    
+                    p.selected_role = role
+                    p.learning_response = response
+                    p.learning_path = extract_topics(response)
+                    
+                    status.update(label="✅ Learning path ready!", state="complete")
+                except Exception as e:
+                    status.update(label="❌ Error", state="error")
+                    st.error(f"Model error: {str(e)[:100]}. Try selecting a different model.")
+                    return
             
             st.rerun()
 

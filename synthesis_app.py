@@ -623,9 +623,7 @@ def main():
         "gemini-2.0-flash",
         "gemini-2.5-flash",
         "gemini-1.5-pro",
-        "gemini-1.5-flash",
-        "gemini-3-pro-preview",
-        "gemini-3-flash-preview"
+        "gemini-1.5-flash"
     ]
     model_choice = display_menu("Select AI Model (Enter for default)", model_options, allow_exit=False)
     selected_model = model_options[model_choice] if model_choice >= 0 else "gemma-3-27b-it"
